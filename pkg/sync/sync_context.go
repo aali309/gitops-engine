@@ -995,7 +995,7 @@ func FormatStatefulSetError(err error, targetObj *unstructured.Unstructured, liv
 
 		if targetExists && liveExists && !reflect.DeepEqual(targetVal, liveVal) {
 			// Return exact Kubernetes error with field information appended
-			return fmt.Errorf("The StatefulSet \"%s\" is invalid: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden (field: spec.%s was modified)",
+			return fmt.Errorf("the StatefulSet \"%s\" is invalid: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden (field: spec.%s was modified)",
 				targetObj.GetName(),
 				field)
 		}

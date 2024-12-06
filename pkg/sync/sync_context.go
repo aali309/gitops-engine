@@ -969,8 +969,8 @@ func (sc *syncContext) shouldUseServerSideApply(targetObj *unstructured.Unstruct
 //===============================================================================================================
 
 func FormatStatefulSetError(err error, targetObj *unstructured.Unstructured, liveObj *unstructured.Unstructured) error {
-	if err == nil {
-		return nil
+	if err == nil || targetObj == nil || liveObj == nil {
+		return err
 	}
 
 	errMsg := err.Error()
@@ -979,26 +979,38 @@ func FormatStatefulSetError(err error, targetObj *unstructured.Unstructured, liv
 	}
 
 	// Get the specs to compare
-	targetSpec, _, _ := unstructured.NestedMap(targetObj.Object, "spec")
-	liveSpec, _, _ := unstructured.NestedMap(liveObj.Object, "spec")
-	if targetSpec == nil || liveSpec == nil {
+	targetSpec, targetFound, _ := unstructured.NestedMap(targetObj.Object, "spec")
+	liveSpec, liveFound, _ := unstructured.NestedMap(liveObj.Object, "spec")
+	if !targetFound || !liveFound {
 		return err
 	}
 
-	// Known immutable StatefulSet fields
-	immutableFields := []string{"serviceName", "podManagementPolicy", "volumeClaimTemplates", "selector"}
+	// List of immutable fields to check
+	immutableFields := []string{
+		"serviceName",
+		"podManagementPolicy",
+		"volumeClaimTemplates",
+		"selector",
+	}
 
-	// Find which field changed
+	// Find which immutable fields were changed
+	var changedFields []string
 	for _, field := range immutableFields {
 		targetVal, targetExists := targetSpec[field]
 		liveVal, liveExists := liveSpec[field]
 
 		if targetExists && liveExists && !reflect.DeepEqual(targetVal, liveVal) {
-			// Return exact Kubernetes error with field information appended
-			return fmt.Errorf("the StatefulSet \"%s\" is invalid: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden (field: spec.%s was modified)",
-				targetObj.GetName(),
-				field)
+			changedFields = append(changedFields, field)
 		}
+	}
+
+	if len(changedFields) > 0 {
+		return fmt.Errorf("StatefulSet %q update failed: attempted to change immutable field(s): spec.%s.\n"+
+			"Only the following fields are mutable: 'replicas', 'template', 'updateStrategy', "+
+			"'persistentVolumeClaimRetentionPolicy', 'minReadySeconds', and 'ordinals'.\n"+
+			"Consider using 'force' sync to replace the resource",
+			targetObj.GetName(),
+			strings.Join(changedFields, ", spec."))
 	}
 
 	return err
